@@ -9,17 +9,13 @@
 #define _DIST_MAX 410
 
 //Servo range
-#define _DUTY_MIN 500
+#define _DUTY_MIN 900
 #define _DUTY_NEU 1480
-#define _DUTY_MAX 2400
+#define _DUTY_MAX 1500
 
 //Servo instance
 Servo myservo;
 int a, b;
-
-float dist_raw, dist_ema;
-
-int duty_chg_per_interval;
 
 void setup(){
 //attach servo
@@ -33,7 +29,6 @@ void setup(){
 
   a = 70;
   b = 390;
-  myservo.writeMicroseconds(1480);
 }
 
 float ir_distance(void){ // return value unit: mm
@@ -52,10 +47,10 @@ void loop(){
   Serial.println(dist_cali);
   
   if(dist_cali > 255) {
-    myservo.writeMicroseconds(900);
+    myservo.writeMicroseconds(_DUTY_MIN);
   }
   else {
-    myservo.writeMicroseconds(1480);
+    myservo.writeMicroseconds(_DUTY_MAX);
   }
   delay(20);
 }
