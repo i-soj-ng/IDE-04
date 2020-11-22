@@ -8,18 +8,10 @@
 #define _DIST_MIN 100
 #define _DIST_MAX 410
 
-//Distance sensor
-#define _DIST_ALPHA 0.0
-
 //Servo range
 #define _DUTY_MIN 500
 #define _DUTY_NEU 1480
 #define _DUTY_MAX 2400
-
-#define _DIST_ALPHA 0.0
-
-#define _SERVO_ANGLE 30.0
-#define _SERVO_SPEED 30.0
 
 //Servo instance
 Servo myservo;
