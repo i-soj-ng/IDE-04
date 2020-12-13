@@ -4,32 +4,33 @@
 #define PIN_LED 9
 
 //Framework setting
-#define _DIST_TARGET 255
+#define _DIST_TARGET 220
 #define _DIST_MIN 100
 #define _DIST_MAX 410
 
 //Distance senseor
-#define _DIST_ALPHA 0.5
+#define _DIST_ALPHA 0.5 //0~1 사이의 값
 
 //Servo range
-#define _DUTY_MIN 1500
-#define _DUTY_NEU 1200
-#define _DUTY_MAX 900
+#define _DUTY_MIN 1600
+#define _DUTY_NEU 1120
+#define _DUTY_MAX 800
 
 //Servo speed control
-#define _SERVO_ANGLE 30.0
-#define _SERVO_SPEED 30.0
+#define _SERVO_ANGLE 50.0
+#define _SERVO_SPEED 100.0
 
 //Event periods
 #define _INTERVAL_DIST 30
 #define _INTERVAL_SERVO 20
 #define _INTERVAL_SERIAL 100
+#define INTERVAL 10.0
 
 //PID Parameters
-#define _KP 0.4
+#define _KP 1.5
 
-#define a 70
-#define b 390
+#define a 80
+#define b 420
 
 //////////////////////
 // global variables //
@@ -40,10 +41,11 @@ Servo myservo;
 
 //Distance sensor
 float dist_target;
-float dist_raw, dist_ema;
+float dist_raw;
 
 //Event periods
 unsigned long last_sampling_time_dist, last_sampling_time_servo, last_sampling_time_serial;
+
 bool event_dist, event_servo, event_serial;
 
 //Servo speed control
@@ -53,44 +55,12 @@ int duty_target, duty_curr;
 //PID variables
 float error_curr, error_prev, control, pterm, dterm, iterm;
 
-//===================================================
-#define DELAY_MICROS  1500
+#define DELAY_MICROS 1500
 #define EMA_ALPHA 0.35
-float ema_dist=0;
+float ema_dist = 0;
 float filtered_dist;
 float samples_num = 3;
 
-float ir_distance(void){ // return value unit: mm
-  float val;
-  float volt = float(analogRead(PIN_IR));
-  val = ((6762.0/(volt-9.0))-4.0) * 10.0;
-  return val;
-}
-// ================
-float under_noise_filter(void){
-  int currReading;
-  int largestReading = 0;
-  for (int i = 0; i < samples_num; i++) {
-    currReading = ir_distance();
-    if (currReading > largestReading) { largestReading = currReading; }
-    // Delay a short time before taking another reading
-    delayMicroseconds(DELAY_MICROS);
-  }
-  return largestReading;
-}
-
-float filtered_ir_distance(void){
-  int currReading;
-  int lowestReading = 1024;
-  dist_raw = ir_distance();
-  for (int i = 0; i < samples_num; i++) {
-    currReading = under_noise_filter();
-    if (currReading < lowestReading) { lowestReading = currReading; }
-  }
-  ema_dist = EMA_ALPHA*lowestReading + (1-EMA_ALPHA)*ema_dist;
-  return ema_dist;
-}
-//===================================================
 
 void setup() {
   //initialize GPIO pins for LED and attach servo
@@ -105,7 +75,7 @@ void setup() {
   Serial.begin(57600);
 
   //convert angle speed into duty change per interval.
-  duty_chg_per_interval = (_DUTY_MIN - _DUTY_MAX) * (_SERVO_SPEED / _SERVO_ANGLE) * (_INTERVAL_SERVO/1000.0);
+  duty_chg_per_interval = (_DUTY_MIN - _DUTY_MAX) * (_SERVO_SPEED / _SERVO_ANGLE) * (float(INTERVAL)/1000.0);
 }  
 
 void loop() {
@@ -135,24 +105,23 @@ void loop() {
 
   if(event_dist){
     event_dist = false;
-    dist_ema = filtered_ir_distance(); //get a distance reading from the distance sensor
+    dist_raw = ir_distance_filtered(); //get a distance reading from the distance sensor
+    //PID control logic
+    error_curr = dist_raw - _DIST_TARGET;
+    pterm = _KP * error_curr;
+    iterm = 0;
+    dterm = 0;
+    control = pterm * (-1);
+  
+    duty_target = _DUTY_NEU + control;
+    if(duty_target > _DUTY_MIN){
+      duty_target = _DUTY_MIN;
+    }
+    else if(duty_target < _DUTY_MAX){
+      duty_target = _DUTY_MAX;
+    }
   }
-
-  //PID control logic
-  error_curr = dist_ema - _DIST_TARGET;
-  pterm = error_curr;
-  iterm = 0;
-  dterm = 0;
-  control = _KP * (-pterm) + iterm + dterm;
-
-  duty_target = _DUTY_NEU + control * ((control > 0) ? (_DUTY_MIN - _DUTY_NEU) : (_DUTY_NEU - _DUTY_MAX));
-
-  if(duty_target > _DUTY_MIN){
-    duty_target = _DUTY_MIN;
-  }
-  else if(duty_target < _DUTY_MAX){
-    duty_target = _DUTY_MAX;
-  }
+  
 
   if(event_servo){
     event_servo = false;
@@ -180,4 +149,33 @@ void loop() {
     Serial.print(map(duty_curr,1000,2000,410,510));
     Serial.println(",Min:100,Low:200,dist_target:255,High:310,Max:410");
   }
+}
+
+float ir_distance(void){
+  float value;
+  float volt = float(analogRead(PIN_IR));
+  value = ((6762.0/(volt-9.0))-4.0) * 10.0;
+  return value;
+}
+
+float under_noise_filter(void){
+  int currReading;
+  int largestReading = 0;
+  for (int i = 0; i < samples_num; i++){
+    currReading = ir_distance();
+    if(currReading > largestReading) {largestReading = currReading; }
+    delayMicroseconds(DELAY_MICROS);
+  }
+  return largestReading;
+}
+
+float ir_distance_filtered(void){
+  int currReading;
+  int lowestReading = 1024;
+  for (int i=0; i < samples_num; i++){
+    currReading = under_noise_filter();
+    if (currReading < lowestReading) { lowestReading = currReading; }
+  }
+  ema_dist = EMA_ALPHA*lowestReading + (1-EMA_ALPHA)*ema_dist;
+  return ema_dist;
 }
